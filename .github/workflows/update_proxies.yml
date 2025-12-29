@@ -31,18 +31,11 @@ jobs:
             ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-
             ${{ runner.os }}-mix-
 
-      - name: Install dependencies
-        run: mix deps.get
-        env:
-          MIX_ENV: prod
-
-      - name: Compile application
-        run: mix compile
-        env:
-          MIX_ENV: prod
-
-      - name: Build escript
-        run: mix escript.build
+      - name: Compile script
+        run: |
+          mix deps.get
+          mix compile
+          mix escript.build --force --verbose
         env:
           MIX_ENV: prod
 
