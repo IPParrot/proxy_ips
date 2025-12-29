@@ -1,0 +1,76 @@
+name: Update Proxy Lists
+
+on:
+  schedule:
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-proxies:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - name: Restore dependencies cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-
+            ${{ runner.os }}-mix-
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Build escript
+        run: mix escript.build
+
+      - name: Run proxy collection
+        run: ./proxy_ips
+
+      - name: Create proxies archive
+        run: |
+          cd proxies
+          tar -czf ../proxies.tar.gz *
+          cd ..
+
+      - name: Generate release tag
+        id: tag
+        run: |
+          echo "tag=v$(date -u +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
+          echo "date=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Proxy Lists - ${{ steps.tag.outputs.date }}
+          body: |
+            Automated proxy list update
+
+            Generated: ${{ steps.tag.outputs.date }}
+
+            ## Download
+            Download `proxies.tar.gz` and extract to get all proxy lists.
+          files: proxies.tar.gz
+          draft: false
+          prerelease: false
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add proxies/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update proxy lists - ${{ steps.tag.outputs.date }}" && git push)
