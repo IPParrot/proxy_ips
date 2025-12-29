@@ -33,9 +33,18 @@ jobs:
 
       - name: Install dependencies
         run: mix deps.get
+        env:
+          MIX_ENV: prod
+
+      - name: Compile application
+        run: mix compile
+        env:
+          MIX_ENV: prod
 
       - name: Build escript
         run: mix escript.build
+        env:
+          MIX_ENV: prod
 
       - name: Run proxy collection
         run: ./proxy_ips
