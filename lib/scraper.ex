@@ -17,12 +17,15 @@ defmodule ProxyIps.Scraper do
     fetch_fn = fn ->
       Logger.info("Downloading proxies from: #{url}")
 
-      case Req.get(url,
-             finch: ProxyIps.Finch,
-             retry: :transient,
-             max_retries: 3,
-             receive_timeout: Config.source_fetch_timeout()
-           ) do
+      req = %{
+        url: url,
+        method: :get,
+        timeout_ms: Config.source_fetch_timeout(),
+        connecttimeout_ms: 5_000,
+        ssl_verifypeer: false
+      }
+
+      case :katipo.req(:katipo_pool, req) do
         {:ok, %{status: 200, body: body}} ->
           {:ok, body}
 
@@ -38,11 +41,11 @@ defmodule ProxyIps.Scraper do
           Logger.warning("Failed to fetch from #{url}: HTTP #{status}")
           {:error, {:http_error, status}}
 
-        {:error, %{reason: :timeout}} ->
+        {:error, %{code: :operation_timedout}} ->
           Logger.warning("Timeout fetching from #{url}")
           {:error, :timeout}
 
-        {:error, %{reason: :econnrefused}} ->
+        {:error, %{code: :couldnt_connect}} ->
           Logger.warning("Connection refused for #{url}")
           {:error, :connection_refused}
 

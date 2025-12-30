@@ -39,34 +39,56 @@ defmodule ProxyIps.Tester do
       "Skipping #{length(cached_proxies)} proxies already tested (#{length(working_from_cache)} working from cache)"
     )
 
-    Logger.info("Testing #{length(needs_testing)} new/expired #{protocol} proxies...")
+    total_to_test = length(needs_testing)
 
-    # Test only new proxies
-    newly_working =
-      needs_testing
-      |> Flow.from_enumerable(max_demand: 10, stages: 8)
-      |> Flow.map(fn proxy_map ->
-        case test_proxy_with_cache(proxy_map.proxy, protocol) do
-          :ok ->
-            Logger.debug("✓ #{protocol} proxy working: #{proxy_map.proxy}")
-            proxy_map
+    if total_to_test > 0 do
+      Logger.info("Testing #{total_to_test} new/expired #{protocol} proxies...")
 
-          {:error, reason} ->
-            Logger.debug("✗ #{protocol} proxy failed: #{proxy_map.proxy} - #{inspect(reason)}")
-            nil
-        end
-      end)
-      |> Flow.reject(&is_nil/1)
-      |> Enum.to_list()
+      # Start progress tracker
+      {:ok, _pid} = ProxyIps.Progress.start_link(total_to_test)
 
-    # Combine results
-    all_working = working_from_cache ++ newly_working
+      # Test only new proxies
+      newly_working =
+        needs_testing
+        |> Flow.from_enumerable(max_demand: 10, stages: 8)
+        |> Flow.map(fn proxy_map ->
+          result =
+            case test_proxy_with_cache(proxy_map.proxy, protocol) do
+              :ok ->
+                Logger.debug("✓ #{protocol} proxy working: #{proxy_map.proxy}")
+                proxy_map
 
-    Logger.info(
-      "Found #{length(all_working)} total working #{protocol} proxies (#{length(working_from_cache)} cached + #{length(newly_working)} newly tested)"
-    )
+              {:error, reason} ->
+                Logger.debug(
+                  "✗ #{protocol} proxy failed: #{proxy_map.proxy} - #{inspect(reason)}"
+                )
 
-    all_working
+                nil
+            end
+
+          # Increment progress counter
+          ProxyIps.Progress.increment()
+          result
+        end)
+        |> Flow.reject(&is_nil/1)
+        |> Enum.to_list()
+
+      # Final progress report
+      ProxyIps.Progress.final_report()
+      ProxyIps.Progress.stop()
+
+      # Combine results
+      all_working = working_from_cache ++ newly_working
+
+      Logger.info(
+        "Found #{length(all_working)} total working #{protocol} proxies (#{length(working_from_cache)} cached + #{length(newly_working)} newly tested)"
+      )
+
+      all_working
+    else
+      Logger.info("No new proxies to test, using #{length(working_from_cache)} from cache")
+      working_from_cache
+    end
   end
 
   @doc """
@@ -111,24 +133,19 @@ defmodule ProxyIps.Tester do
   defp test_http_proxy(proxy) do
     [ip, port] = String.split(proxy, ":")
 
-    opts = [
-      connect_options: [
-        proxy: {:http, String.trim(ip), String.to_integer(String.trim(port)), []},
-        transport_opts: [
-          timeout: Config.proxy_connect_timeout(),
-          inet6: false,
-          verify: :verify_none
-        ]
-      ],
-      receive_timeout: Config.proxy_test_timeout(),
-      retry: false,
-      max_redirects: 0
-    ]
+    proxy_url = "http://#{String.trim(ip)}:#{String.trim(port)}"
 
-    result = Req.get(@test_url, opts)
+    req = %{
+      url: @test_url,
+      method: :get,
+      proxy: proxy_url,
+      connecttimeout_ms: Config.proxy_connect_timeout(),
+      timeout_ms: Config.proxy_test_timeout(),
+      ssl_verifyhost: false,
+      ssl_verifypeer: false
+    }
 
-    # Debug first few failures
-    case result do
+    case :katipo.req(:katipo_pool, req) do
       {:ok, %{status: 200}} ->
         :ok
 
@@ -136,39 +153,34 @@ defmodule ProxyIps.Tester do
         Logger.debug("HTTP proxy #{proxy} returned status #{status}")
         {:error, {:invalid_response, status}}
 
-      {:error, %{reason: :timeout}} ->
+      {:error, %{code: :operation_timedout}} ->
         {:error, :timeout}
 
-      {:error, %{reason: :econnrefused}} ->
+      {:error, %{code: :couldnt_connect}} ->
         {:error, :connection_refused}
 
-      {:error, error} ->
-        Logger.debug("HTTP proxy #{proxy} error: #{inspect(error)}")
-        {:error, error}
+      {:error, reason} ->
+        Logger.debug("HTTP proxy #{proxy} error: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 
   defp test_https_proxy(proxy) do
     [ip, port] = String.split(proxy, ":")
 
-    opts = [
-      connect_options: [
-        proxy: {:http, String.trim(ip), String.to_integer(String.trim(port)), []},
-        transport_opts: [
-          timeout: Config.proxy_connect_timeout(),
-          inet6: false,
-          verify: :verify_none
-        ]
-      ],
-      receive_timeout: Config.proxy_test_timeout(),
-      retry: false,
-      max_redirects: 0
-    ]
+    proxy_url = "http://#{String.trim(ip)}:#{String.trim(port)}"
 
-    result = Req.get(@test_url, opts)
+    req = %{
+      url: @test_url,
+      method: :get,
+      proxy: proxy_url,
+      connecttimeout_ms: Config.proxy_connect_timeout(),
+      timeout_ms: Config.proxy_test_timeout(),
+      ssl_verifyhost: false,
+      ssl_verifypeer: false
+    }
 
-    # Debug first few failures
-    case result do
+    case :katipo.req(:katipo_pool, req) do
       {:ok, %{status: 200}} ->
         :ok
 
@@ -176,15 +188,15 @@ defmodule ProxyIps.Tester do
         Logger.debug("HTTPS proxy #{proxy} returned status #{status}")
         {:error, {:invalid_response, status}}
 
-      {:error, %{reason: :timeout}} ->
+      {:error, %{code: :operation_timedout}} ->
         {:error, :timeout}
 
-      {:error, %{reason: :econnrefused}} ->
+      {:error, %{code: :couldnt_connect}} ->
         {:error, :connection_refused}
 
-      {:error, error} ->
-        Logger.debug("HTTPS proxy #{proxy} error: #{inspect(error)}")
-        {:error, error}
+      {:error, reason} ->
+        Logger.debug("HTTPS proxy #{proxy} error: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 

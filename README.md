@@ -56,15 +56,59 @@ All proxy tests use the following settings (matching curl behavior):
 - **SSL verification**: Disabled (`ssl_verifypeer: false`)
 
 ### Testing Implementation
-- **HTTP/HTTPS**: Tested via Req/Finch (native Elixir libraries)
-- **SOCKS4/SOCKS5**: Tested via Katipo (Erlang NIF wrapping libcurl)
+All proxy testing (HTTP/HTTPS/SOCKS4/SOCKS5) uses **Katipo** (Erlang NIF wrapping libcurl):
 
 Katipo provides:
 - Native performance (no process spawning overhead)
 - Connection pooling (100 concurrent workers)
 - Native BEAM integration
+- Unified API for all protocols
 
 These settings match the reference implementation from [free-proxy-list](https://github.com/NikolaiT/free-proxy-list) for consistent results.
+
+## Performance & Timing Estimates
+
+### Configuration
+- **Concurrent tests**: 80 (8 Flow stages × 10 max demand)
+- **Katipo pool**: 100 workers
+- **Timeouts**: 5s connect, 15s total
+
+### Expected Processing Times
+
+For ~400,000 total proxies (HTTP/HTTPS/SOCKS4/SOCKS5):
+
+| Scenario | Proxies Tested | Time |
+|----------|---------------|------|
+| **First Run** (no cache) | 406,802 | 7-21 hours |
+| **Average** (mixed) | 406,802 | ~11 hours |
+| **Best Case** (fast failures) | 406,802 | ~7 hours |
+| **Subsequent Runs** (90% cached) | ~40,680 | ~1 hour |
+
+**Key Optimizations:**
+- ✅ Katipo NIF: No process spawn overhead (~10 min saved vs curl)
+- ✅ Connection pooling: Reused connections across requests
+- ✅ Result caching: 18-hour cache skips retesting
+- ✅ Parallel testing: 80 concurrent tests
+
+**Note**: Actual time varies based on network conditions and proxy response rates. The 18-hour result cache dramatically speeds up subsequent runs.
+
+### Progress Tracking
+
+The scraper reports real-time progress during testing:
+
+```
+Progress: 4068/40680 (10.0%) | Rate: 12.45/sec | ETA: 48m 32s
+Progress: 8136/40680 (20.0%) | Rate: 13.12/sec | ETA: 41m 18s
+Progress: 12204/40680 (30.0%) | Rate: 13.67/sec | ETA: 34m 42s
+```
+
+Progress updates show:
+- **Completed/Total**: Number of proxies tested
+- **Percentage**: Progress percentage
+- **Rate**: Proxies tested per second
+- **ETA**: Estimated time remaining
+
+Progress is reported every 5% completion.
 
 ## Local Usage
 
