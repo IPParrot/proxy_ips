@@ -4,6 +4,7 @@ defmodule ProxyIps.Config do
   """
 
   @default_proxy_test_timeout 15_000
+  @default_proxy_connect_timeout 5_000
   @default_source_fetch_timeout 10_000
   @default_source_cache_ttl_hours 6
   @default_result_cache_ttl_hours 18
@@ -15,6 +16,15 @@ defmodule ProxyIps.Config do
   @spec proxy_test_timeout() :: pos_integer()
   def proxy_test_timeout do
     Application.get_env(:proxy_ips, :proxy_test_timeout, @default_proxy_test_timeout)
+  end
+
+  @doc """
+  Get proxy connection timeout in milliseconds
+  Default: 5,000ms (5 seconds)
+  """
+  @spec proxy_connect_timeout() :: pos_integer()
+  def proxy_connect_timeout do
+    Application.get_env(:proxy_ips, :proxy_connect_timeout, @default_proxy_connect_timeout)
   end
 
   @doc """

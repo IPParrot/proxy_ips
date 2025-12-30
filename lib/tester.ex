@@ -112,20 +112,28 @@ defmodule ProxyIps.Tester do
     [ip, port] = String.split(proxy, ":")
 
     opts = [
-      finch: ProxyIps.Finch,
       connect_options: [
-        proxy: {:http, ip, String.to_integer(port), []}
+        proxy: {:http, String.trim(ip), String.to_integer(String.trim(port)), []},
+        transport_opts: [
+          timeout: Config.proxy_connect_timeout(),
+          inet6: false,
+          verify: :verify_none
+        ]
       ],
       receive_timeout: Config.proxy_test_timeout(),
       retry: false,
       max_redirects: 0
     ]
 
-    case Req.get(@test_url, opts) do
+    result = Req.get(@test_url, opts)
+
+    # Debug first few failures
+    case result do
       {:ok, %{status: 200}} ->
         :ok
 
       {:ok, %{status: status}} ->
+        Logger.debug("HTTP proxy #{proxy} returned status #{status}")
         {:error, {:invalid_response, status}}
 
       {:error, %{reason: :timeout}} ->
@@ -134,8 +142,9 @@ defmodule ProxyIps.Tester do
       {:error, %{reason: :econnrefused}} ->
         {:error, :connection_refused}
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, error} ->
+        Logger.debug("HTTP proxy #{proxy} error: #{inspect(error)}")
+        {:error, error}
     end
   end
 
@@ -143,20 +152,28 @@ defmodule ProxyIps.Tester do
     [ip, port] = String.split(proxy, ":")
 
     opts = [
-      finch: ProxyIps.Finch,
       connect_options: [
-        proxy: {:https, ip, String.to_integer(port), []}
+        proxy: {:http, String.trim(ip), String.to_integer(String.trim(port)), []},
+        transport_opts: [
+          timeout: Config.proxy_connect_timeout(),
+          inet6: false,
+          verify: :verify_none
+        ]
       ],
       receive_timeout: Config.proxy_test_timeout(),
       retry: false,
       max_redirects: 0
     ]
 
-    case Req.get(@test_url, opts) do
+    result = Req.get(@test_url, opts)
+
+    # Debug first few failures
+    case result do
       {:ok, %{status: 200}} ->
         :ok
 
       {:ok, %{status: status}} ->
+        Logger.debug("HTTPS proxy #{proxy} returned status #{status}")
         {:error, {:invalid_response, status}}
 
       {:error, %{reason: :timeout}} ->
@@ -165,47 +182,50 @@ defmodule ProxyIps.Tester do
       {:error, %{reason: :econnrefused}} ->
         {:error, :connection_refused}
 
-      {:error, reason} ->
-        {:error, reason}
+      {:error, error} ->
+        Logger.debug("HTTPS proxy #{proxy} error: #{inspect(error)}")
+        {:error, error}
     end
   end
 
   defp test_socks_proxy(proxy, version) do
-    # For SOCKS proxies, we'll use a system curl command since Req/Mint don't have built-in SOCKS support
     [ip, port] = String.split(proxy, ":")
 
-    socks_flag =
+    # Build SOCKS proxy URL
+    proxy_scheme =
       case version do
-        :socks4 -> "--socks4"
-        :socks5 -> "--socks5"
+        :socks4 -> "socks4"
+        :socks5 -> "socks5"
       end
 
-    timeout_seconds = Config.proxy_test_timeout() |> div(1000) |> to_string()
+    proxy_url = "#{proxy_scheme}://#{String.trim(ip)}:#{String.trim(port)}"
 
-    case System.cmd("curl", [
-           "--max-time",
-           timeout_seconds,
-           "--connect-timeout",
-           "5",
-           "--silent",
-           "-4",
-           socks_flag,
-           "#{ip}:#{port}",
-           @test_url
-         ]) do
-      {_output, 0} ->
+    # Build Katipo request
+    req = %{
+      url: @test_url,
+      method: :get,
+      proxy: proxy_url,
+      connecttimeout_ms: Config.proxy_connect_timeout(),
+      timeout_ms: Config.proxy_test_timeout(),
+      ssl_verifyhost: false,
+      ssl_verifypeer: false
+    }
+
+    case :katipo.req(:katipo_pool, req) do
+      {:ok, %{status: 200}} ->
         :ok
 
-      {_output, 7} ->
-        {:error, :connection_refused}
+      {:ok, %{status: status}} ->
+        {:error, {:invalid_response, status}}
 
-      {_output, 28} ->
+      {:error, %{code: :operation_timedout}} ->
         {:error, :timeout}
 
-      {_output, exit_code} ->
-        {:error, {:curl_error, exit_code}}
+      {:error, %{code: :couldnt_connect}} ->
+        {:error, :connection_refused}
+
+      {:error, reason} ->
+        {:error, reason}
     end
-  rescue
-    e -> {:error, {:curl_exception, e}}
   end
 end

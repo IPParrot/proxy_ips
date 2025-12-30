@@ -23,7 +23,8 @@ defmodule ProxyIps.MixProject do
   defp deps do
     [
       {:req, "~> 0.5"},
-      {:flow, "~> 1.2"}
+      {:flow, "~> 1.2"},
+      {:katipo, "~> 1.1"}
     ]
   end
 

@@ -40,11 +40,26 @@ tar -xzf proxies.tar.gz
 
 - Elixir 1.18 or later
 - Erlang/OTP 25 or later
-- **curl** (required for SOCKS4/SOCKS5 proxy testing)
-  - The tool uses `curl` with `--socks4` and `--socks5` flags to test SOCKS proxies
+- **libcurl** (required for SOCKS proxy testing via Katipo NIF)
+  - SOCKS4/SOCKS5 proxies are tested using Katipo (Erlang libcurl NIF bindings)
   - HTTP/HTTPS proxies are tested natively via Elixir's Req library
-  - If curl is not installed, SOCKS proxy testing will fail silently
-  - Install: `brew install curl` (macOS), `apt install curl` (Ubuntu/Debian), or see [curl.se](https://curl.se/)
+  - Install: `brew install curl` (macOS), `apt install curl libcurl4-openssl-dev` (Ubuntu/Debian)
+  - Katipo compiles a NIF that links against libcurl at build time
+
+## Proxy Testing Configuration
+
+All proxy tests use the following settings (matching curl behavior):
+
+- **Connection timeout**: 5 seconds (`connecttimeout_ms: 5000`)
+- **Total timeout**: 15 seconds (`timeout_ms: 15000`)
+- **IPv4 preference**: Enabled (via connection options)
+- **SSL verification**: Disabled (`ssl_verifypeer: false`)
+
+### Testing Implementation
+- **HTTP/HTTPS**: Tested via Req/Finch (native Elixir libraries)
+- **SOCKS4/SOCKS5**: Tested via Katipo (Erlang NIF wrapping libcurl)
+
+These settings match the reference implementation from [free-proxy-list](https://github.com/NikolaiT/free-proxy-list) for consistent results.
 
 ## Local Usage
 

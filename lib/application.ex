@@ -8,6 +8,15 @@ defmodule ProxyIps.Application do
   @impl true
   @spec start(Application.start_type(), term()) :: {:ok, pid()} | {:error, term()}
   def start(_type, _args) do
+    # Start katipo application
+    {:ok, _} = Application.ensure_all_started(:katipo)
+
+    # Start katipo pool for SOCKS proxy testing
+    pool_name = :katipo_pool
+    pool_size = 100
+    pool_opts = [pipelining: :nothing, max_total_connections: 100]
+    {:ok, _} = :katipo_pool.start(pool_name, pool_size, pool_opts)
+
     children = [
       # Finch HTTP client with connection pooling
       {Finch,
