@@ -15,27 +15,32 @@ defmodule ProxyIps.Progress do
         }
 
   @doc """
-  Start the progress tracker
+  Start the progress tracker for a specific protocol
   """
-  @spec start_link(non_neg_integer()) :: {:ok, pid()}
-  def start_link(total) do
+  @spec start_link(non_neg_integer(), atom()) :: {:ok, pid()}
+  def start_link(total, protocol) do
     initial_state = %{
       total: total,
       completed: 0,
       start_time: System.monotonic_time(:second),
       last_report_count: 0,
-      report_interval: max(div(total, 20), 1)
+      report_interval: max(div(total, 20), 1),
+      protocol: protocol
     }
 
-    Agent.start_link(fn -> initial_state end, name: __MODULE__)
+    Agent.start_link(fn -> initial_state end, name: process_name(protocol))
+  end
+
+  defp process_name(protocol) do
+    :"#{__MODULE__}.#{protocol}"
   end
 
   @doc """
   Increment the completed count and report progress if interval reached
   """
-  @spec increment() :: :ok
-  def increment do
-    Agent.update(__MODULE__, fn state ->
+  @spec increment(atom()) :: :ok
+  def increment(protocol) do
+    Agent.update(process_name(protocol), fn state ->
       new_completed = state.completed + 1
       new_state = %{state | completed: new_completed}
 
@@ -52,9 +57,9 @@ defmodule ProxyIps.Progress do
   @doc """
   Get current progress statistics
   """
-  @spec get_stats() :: map()
-  def get_stats do
-    Agent.get(__MODULE__, fn state ->
+  @spec get_stats(atom()) :: map()
+  def get_stats(protocol) do
+    Agent.get(process_name(protocol), fn state ->
       elapsed = max(System.monotonic_time(:second) - state.start_time, 1)
       rate = state.completed / elapsed
       remaining = state.total - state.completed
@@ -75,12 +80,12 @@ defmodule ProxyIps.Progress do
   @doc """
   Report final statistics
   """
-  @spec final_report() :: :ok
-  def final_report do
-    stats = get_stats()
+  @spec final_report(atom()) :: :ok
+  def final_report(protocol) do
+    stats = get_stats(protocol)
 
     Logger.info("""
-    ✓ Testing complete!
+    [#{String.upcase(to_string(protocol))}] ✓ Testing complete!
       Total: #{stats.total}
       Time: #{format_duration(stats.elapsed_seconds)}
       Rate: #{Float.round(stats.rate_per_second, 2)} proxies/sec
@@ -92,10 +97,12 @@ defmodule ProxyIps.Progress do
   @doc """
   Stop the progress tracker
   """
-  @spec stop() :: :ok
-  def stop do
-    if Process.whereis(__MODULE__) do
-      Agent.stop(__MODULE__)
+  @spec stop(atom()) :: :ok
+  def stop(protocol) do
+    process = process_name(protocol)
+
+    if Process.whereis(process) do
+      Agent.stop(process)
     end
 
     :ok
@@ -110,8 +117,10 @@ defmodule ProxyIps.Progress do
     remaining = state.total - state.completed
     eta_seconds = if rate > 0, do: trunc(remaining / rate), else: 0
 
+    protocol_label = String.upcase(to_string(state.protocol))
+
     Logger.info(
-      "Progress: #{state.completed}/#{state.total} (#{Float.round(percentage, 1)}%) | " <>
+      "[#{protocol_label}] Progress: #{state.completed}/#{state.total} (#{Float.round(percentage, 1)}%) | " <>
         "Rate: #{format_rate(rate)}/sec | " <>
         "ETA: #{format_duration(eta_seconds)}"
     )

@@ -20,25 +20,39 @@ defmodule ProxyIps.CLI do
     # Ensure output directory exists
     File.mkdir_p!(@output_dir)
 
-    # Process each protocol
+    # Process all protocols in parallel (4x speedup)
+    IO.puts("\n=== Starting parallel testing of all protocols ===")
+
     all_working_proxies =
       Sources.all_sources()
-      |> Enum.map(fn {protocol, sources} ->
-        IO.puts("\n=== Processing #{String.upcase(to_string(protocol))} proxies ===")
+      |> Task.async_stream(
+        fn {protocol, sources} ->
+          IO.puts("\n[#{String.upcase(to_string(protocol))}] Starting processing...")
 
-        # Fetch proxies
-        proxies = Scraper.fetch_from_sources(sources, protocol)
-        IO.puts("Found #{length(proxies)} unique proxies")
+          # Fetch proxies
+          proxies = Scraper.fetch_from_sources(sources, protocol)
 
-        # Test proxies
-        working_proxies = Tester.test_proxies(proxies, protocol)
-        IO.puts("✓ #{length(working_proxies)} working proxies")
+          IO.puts(
+            "[#{String.upcase(to_string(protocol))}] Found #{length(proxies)} unique proxies"
+          )
 
-        # Save results
-        save_proxies(working_proxies, protocol)
+          # Test proxies
+          working_proxies = Tester.test_proxies(proxies, protocol)
 
-        {protocol, working_proxies}
-      end)
+          IO.puts(
+            "[#{String.upcase(to_string(protocol))}] ✓ #{length(working_proxies)} working proxies"
+          )
+
+          # Save results
+          save_proxies(working_proxies, protocol)
+
+          {protocol, working_proxies}
+        end,
+        ordered: false,
+        timeout: :infinity,
+        max_concurrency: 4
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
       |> Map.new()
 
     # Generate summary files

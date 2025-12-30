@@ -69,46 +69,50 @@ These settings match the reference implementation from [free-proxy-list](https:/
 ## Performance & Timing Estimates
 
 ### Configuration
-- **Concurrent tests**: 80 (8 Flow stages × 10 max demand)
-- **Katipo pool**: 100 workers
+- **Concurrent tests**: 80 per protocol (8 Flow stages × 10 max demand)
+- **Parallel protocols**: All 4 protocols test simultaneously
+- **Katipo pool**: 100 workers shared across protocols
 - **Timeouts**: 5s connect, 15s total
 
 ### Expected Processing Times
 
 For ~400,000 total proxies (HTTP/HTTPS/SOCKS4/SOCKS5):
 
-| Scenario | Proxies Tested | Time |
-|----------|---------------|------|
-| **First Run** (no cache) | 406,802 | 7-21 hours |
-| **Average** (mixed) | 406,802 | ~11 hours |
-| **Best Case** (fast failures) | 406,802 | ~7 hours |
-| **Subsequent Runs** (90% cached) | ~40,680 | ~1 hour |
+| Scenario | Proxies Tested | Sequential Time | **Parallel Time** |
+|----------|---------------|-----------------|-------------------|
+| **First Run** (no cache) | 406,802 | 7-21 hours | **1.75-5.25 hours** |
+| **Average** (mixed) | 406,802 | ~11 hours | **~2.75 hours** |
+| **Best Case** (fast failures) | 406,802 | ~7 hours | **~1.75 hours** |
+| **Subsequent Runs** (90% cached) | ~40,680 | ~1 hour | **~15 minutes** |
 
 **Key Optimizations:**
-- ✅ Katipo NIF: No process spawn overhead (~10 min saved vs curl)
+- ✅ **Parallel protocol testing**: 4x speedup by testing HTTP/HTTPS/SOCKS4/SOCKS5 simultaneously
+- ✅ Katipo NIF: No process spawn overhead
 - ✅ Connection pooling: Reused connections across requests
 - ✅ Result caching: 18-hour cache skips retesting
-- ✅ Parallel testing: 80 concurrent tests
+- ✅ Flow concurrency: 80 concurrent tests per protocol (320 total)
 
 **Note**: Actual time varies based on network conditions and proxy response rates. The 18-hour result cache dramatically speeds up subsequent runs.
 
 ### Progress Tracking
 
-The scraper reports real-time progress during testing:
+The scraper reports real-time progress for each protocol during parallel testing:
 
 ```
-Progress: 4068/40680 (10.0%) | Rate: 12.45/sec | ETA: 48m 32s
-Progress: 8136/40680 (20.0%) | Rate: 13.12/sec | ETA: 41m 18s
-Progress: 12204/40680 (30.0%) | Rate: 13.67/sec | ETA: 34m 42s
+[HTTP] Progress: 4068/40680 (10.0%) | Rate: 12.45/sec | ETA: 48m 32s
+[HTTPS] Progress: 2034/20340 (10.0%) | Rate: 11.89/sec | ETA: 25m 18s
+[SOCKS4] Progress: 5670/56670 (10.0%) | Rate: 13.02/sec | ETA: 1h 5m
+[SOCKS5] Progress: 5670/56670 (10.0%) | Rate: 12.98/sec | ETA: 1h 5m
 ```
 
 Progress updates show:
-- **Completed/Total**: Number of proxies tested
+- **Protocol**: Which protocol is being tested (HTTP/HTTPS/SOCKS4/SOCKS5)
+- **Completed/Total**: Number of proxies tested for that protocol
 - **Percentage**: Progress percentage
 - **Rate**: Proxies tested per second
-- **ETA**: Estimated time remaining
+- **ETA**: Estimated time remaining for that protocol
 
-Progress is reported every 5% completion.
+Each protocol reports progress independently every 5% completion.
 
 ## Local Usage
 

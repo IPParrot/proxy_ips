@@ -45,7 +45,7 @@ defmodule ProxyIps.Tester do
       Logger.info("Testing #{total_to_test} new/expired #{protocol} proxies...")
 
       # Start progress tracker
-      {:ok, _pid} = ProxyIps.Progress.start_link(total_to_test)
+      {:ok, _pid} = ProxyIps.Progress.start_link(total_to_test, protocol)
 
       # Test only new proxies
       newly_working =
@@ -67,15 +67,15 @@ defmodule ProxyIps.Tester do
             end
 
           # Increment progress counter
-          ProxyIps.Progress.increment()
+          ProxyIps.Progress.increment(protocol)
           result
         end)
         |> Flow.reject(&is_nil/1)
         |> Enum.to_list()
 
       # Final progress report
-      ProxyIps.Progress.final_report()
-      ProxyIps.Progress.stop()
+      ProxyIps.Progress.final_report(protocol)
+      ProxyIps.Progress.stop(protocol)
 
       # Combine results
       all_working = working_from_cache ++ newly_working

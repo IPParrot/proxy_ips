@@ -3,8 +3,8 @@ defmodule ProxyIps.Config do
   Configuration management for ProxyIps
   """
 
-  @default_proxy_test_timeout 15_000
-  @default_proxy_connect_timeout 5_000
+  @default_proxy_test_timeout 10_000
+  @default_proxy_connect_timeout 3_000
   @default_source_fetch_timeout 10_000
   @default_source_cache_ttl_hours 6
   @default_result_cache_ttl_hours 18
