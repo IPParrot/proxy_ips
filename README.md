@@ -40,10 +40,10 @@ tar -xzf proxies.tar.gz
 
 - Elixir 1.18 or later
 - Erlang/OTP 25 or later
-- **libcurl** (required for SOCKS proxy testing via Katipo NIF)
-  - SOCKS4/SOCKS5 proxies are tested using Katipo (Erlang libcurl NIF bindings)
+- **libcurl** with libevent (required for Katipo NIF)
+  - SOCKS4/SOCKS5 proxies are tested using Katipo (Erlang NIF wrapping libcurl)
   - HTTP/HTTPS proxies are tested natively via Elixir's Req library
-  - Install: `brew install curl` (macOS), `apt install curl libcurl4-openssl-dev` (Ubuntu/Debian)
+  - Install: `brew install curl libevent` (macOS), `apt install curl libcurl4-openssl-dev libevent-dev` (Ubuntu/Debian)
   - Katipo compiles a NIF that links against libcurl at build time
 
 ## Proxy Testing Configuration
@@ -59,6 +59,11 @@ All proxy tests use the following settings (matching curl behavior):
 - **HTTP/HTTPS**: Tested via Req/Finch (native Elixir libraries)
 - **SOCKS4/SOCKS5**: Tested via Katipo (Erlang NIF wrapping libcurl)
 
+Katipo provides:
+- Native performance (no process spawning overhead)
+- Connection pooling (100 concurrent workers)
+- Native BEAM integration
+
 These settings match the reference implementation from [free-proxy-list](https://github.com/NikolaiT/free-proxy-list) for consistent results.
 
 ## Local Usage
@@ -69,22 +74,24 @@ These settings match the reference implementation from [free-proxy-list](https:/
 mix deps.get
 ```
 
-### Build the escript
+### Compile dependencies (includes Katipo NIF)
 
 ```bash
-mix escript.build
+mix compile
 ```
 
 ### Run the proxy collector
 
 ```bash
-./proxy_ips
+mix proxy_ips
 ```
 
 This will:
 1. Fetch proxy lists from multiple sources
-2. Test each proxy for connectivity
+2. Test each proxy for connectivity (using Katipo for SOCKS, Req for HTTP/HTTPS)
 3. Save working proxies to text files in `proxies/`
+
+**Note**: Run via Mix task (not escript) to support Katipo's NIF dependencies.
 
 ## Caching System
 

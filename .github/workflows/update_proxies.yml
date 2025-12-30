@@ -20,6 +20,11 @@ jobs:
           otp-version: "27.2"
           elixir-version: "1.18.2"
 
+      - name: Install libcurl and libevent
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libevent-dev
+
       - name: Restore dependencies cache
         uses: actions/cache@v4
         with:
@@ -31,16 +36,17 @@ jobs:
             ${{ runner.os }}-mix-${{ hashFiles('.tool-versions') }}-
             ${{ runner.os }}-mix-
 
-      - name: Compile script
+      - name: Compile dependencies
         run: |
           mix deps.get
           mix compile
-          mix escript.build --force --verbose
         env:
           MIX_ENV: prod
 
       - name: Run proxy collection
-        run: ./proxy_ips
+        run: mix proxy_ips
+        env:
+          MIX_ENV: prod
 
       - name: Create proxies archive
         run: |
