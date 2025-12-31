@@ -50,19 +50,14 @@ defmodule ProxyIps.Tester do
       # Test only new proxies
       newly_working =
         needs_testing
-        |> Flow.from_enumerable(max_demand: 10, stages: 8)
+        |> Flow.from_enumerable(max_demand: 20, stages: 16)
         |> Flow.map(fn proxy_map ->
           result =
             case test_proxy_with_cache(proxy_map.proxy, protocol) do
               :ok ->
-                Logger.debug("✓ #{protocol} proxy working: #{proxy_map.proxy}")
                 proxy_map
 
-              {:error, reason} ->
-                Logger.debug(
-                  "✗ #{protocol} proxy failed: #{proxy_map.proxy} - #{inspect(reason)}"
-                )
-
+              {:error, _reason} ->
                 nil
             end
 
@@ -121,11 +116,9 @@ defmodule ProxyIps.Tester do
       end
     rescue
       e ->
-        Logger.debug("Exception testing #{proxy_string}: #{inspect(e)}")
         {:error, {:exception, e}}
     catch
       :exit, reason ->
-        Logger.debug("Exit testing #{proxy_string}: #{inspect(reason)}")
         {:error, {:exit, reason}}
     end
   end
@@ -150,7 +143,6 @@ defmodule ProxyIps.Tester do
         :ok
 
       {:ok, %{status: status}} ->
-        Logger.debug("HTTP proxy #{proxy} returned status #{status}")
         {:error, {:invalid_response, status}}
 
       {:error, %{code: :operation_timedout}} ->
@@ -160,7 +152,6 @@ defmodule ProxyIps.Tester do
         {:error, :connection_refused}
 
       {:error, reason} ->
-        Logger.debug("HTTP proxy #{proxy} error: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -185,7 +176,6 @@ defmodule ProxyIps.Tester do
         :ok
 
       {:ok, %{status: status}} ->
-        Logger.debug("HTTPS proxy #{proxy} returned status #{status}")
         {:error, {:invalid_response, status}}
 
       {:error, %{code: :operation_timedout}} ->
@@ -195,7 +185,6 @@ defmodule ProxyIps.Tester do
         {:error, :connection_refused}
 
       {:error, reason} ->
-        Logger.debug("HTTPS proxy #{proxy} error: #{inspect(reason)}")
         {:error, reason}
     end
   end
