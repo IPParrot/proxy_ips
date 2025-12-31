@@ -3,6 +3,7 @@
 /deps/
 /*.ez
 proxy_ips
+proxies/*.txt
 
 # Mix
 /mix.lock

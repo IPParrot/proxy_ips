@@ -43,6 +43,14 @@ jobs:
         env:
           MIX_ENV: prod
 
+      - name: Restore proxy cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: ${{ runner.os }}-proxy-cache-${{ github.run_number }}
+          restore-keys: |
+            ${{ runner.os }}-proxy-cache-
+
       - name: Run proxy collection
         run: mix proxy_ips
         env:
