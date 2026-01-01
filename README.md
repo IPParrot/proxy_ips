@@ -11,7 +11,6 @@ An Elixir-based proxy scraper and tester that collects and verifies free proxy s
 - Caching prevents redundant testing and downloads
 - Deduplication skips already tested proxies
 - Generates daily updated proxy lists via GitHub Actions
-- Minimal dependencies (Req for HTTP, Flow for concurrency)
 
 ## Output Files
 
@@ -55,65 +54,6 @@ All proxy tests use the following settings (matching curl behavior):
 - **IPv4 preference**: Enabled (via connection options)
 - **SSL verification**: Disabled (`ssl_verifypeer: false`)
 
-### Testing Implementation
-All proxy testing (HTTP/HTTPS/SOCKS4/SOCKS5) uses **Katipo** (Erlang NIF wrapping libcurl):
-
-Katipo provides:
-- Native performance (no process spawning overhead)
-- Connection pooling (100 concurrent workers)
-- Native BEAM integration
-- Unified API for all protocols
-
-These settings match the reference implementation from [free-proxy-list](https://github.com/NikolaiT/free-proxy-list) for consistent results.
-
-## Performance & Timing Estimates
-
-### Configuration
-- **Concurrent tests**: 80 per protocol (8 Flow stages × 10 max demand)
-- **Parallel protocols**: All 4 protocols test simultaneously
-- **Katipo pool**: 100 workers shared across protocols
-- **Timeouts**: 5s connect, 15s total
-
-### Expected Processing Times
-
-For ~400,000 total proxies (HTTP/HTTPS/SOCKS4/SOCKS5):
-
-| Scenario | Proxies Tested | Sequential Time | **Parallel Time** |
-|----------|---------------|-----------------|-------------------|
-| **First Run** (no cache) | 406,802 | 7-21 hours | **1.75-5.25 hours** |
-| **Average** (mixed) | 406,802 | ~11 hours | **~2.75 hours** |
-| **Best Case** (fast failures) | 406,802 | ~7 hours | **~1.75 hours** |
-| **Subsequent Runs** (90% cached) | ~40,680 | ~1 hour | **~15 minutes** |
-
-**Key Optimizations:**
-- ✅ **Parallel protocol testing**: 4x speedup by testing HTTP/HTTPS/SOCKS4/SOCKS5 simultaneously
-- ✅ Katipo NIF: No process spawn overhead
-- ✅ Connection pooling: Reused connections across requests
-- ✅ Result caching: 18-hour cache skips retesting
-- ✅ Flow concurrency: 80 concurrent tests per protocol (320 total)
-
-**Note**: Actual time varies based on network conditions and proxy response rates. The 18-hour result cache dramatically speeds up subsequent runs.
-
-### Progress Tracking
-
-The scraper reports real-time progress for each protocol during parallel testing:
-
-```
-[HTTP] Progress: 4068/40680 (10.0%) | Rate: 12.45/sec | ETA: 48m 32s
-[HTTPS] Progress: 2034/20340 (10.0%) | Rate: 11.89/sec | ETA: 25m 18s
-[SOCKS4] Progress: 5670/56670 (10.0%) | Rate: 13.02/sec | ETA: 1h 5m
-[SOCKS5] Progress: 5670/56670 (10.0%) | Rate: 12.98/sec | ETA: 1h 5m
-```
-
-Progress updates show:
-- **Protocol**: Which protocol is being tested (HTTP/HTTPS/SOCKS4/SOCKS5)
-- **Completed/Total**: Number of proxies tested for that protocol
-- **Percentage**: Progress percentage
-- **Rate**: Proxies tested per second
-- **ETA**: Estimated time remaining for that protocol
-
-Each protocol reports progress independently every 5% completion.
-
 ## Local Usage
 
 ### Install dependencies
@@ -122,7 +62,7 @@ Each protocol reports progress independently every 5% completion.
 mix deps.get
 ```
 
-### Compile dependencies (includes Katipo NIF)
+### Compile dependencies
 
 ```bash
 mix compile
@@ -133,13 +73,6 @@ mix compile
 ```bash
 mix proxy_ips
 ```
-
-This will:
-1. Fetch proxy lists from multiple sources
-2. Test each proxy for connectivity (using Katipo for SOCKS, Req for HTTP/HTTPS)
-3. Save working proxies to text files in `proxies/`
-
-**Note**: Run via Mix task (not escript) to support Katipo's NIF dependencies.
 
 ## Caching System
 
@@ -179,51 +112,6 @@ The repository includes a GitHub Actions workflow that:
 - Commits and pushes updated proxy lists to the repository
 
 Each run creates a new release tagged with the date and time (e.g., `v2025.01.15-0000`).
-
-## Testing Proxies
-
-### HTTP Proxy
-```bash
-curl -x http://PROXY_IP:PORT https://httpbin.org/ip -k
-```
-
-### HTTPS Proxy
-```bash
-curl -x https://PROXY_IP:PORT https://httpbin.org/ip -k
-```
-
-### SOCKS4 Proxy
-```bash
-curl --socks4 PROXY_IP:PORT https://httpbin.org/ip
-```
-
-### SOCKS5 Proxy
-```bash
-curl --socks5 PROXY_IP:PORT https://httpbin.org/ip
-```
-
-## Project Structure
-
-```
-proxy_ips/
-├── lib/
-│   └── proxy_ips/
-│       ├── cli.ex          # Main escript entry point
-│       ├── sources.ex      # Proxy source URLs
-│       ├── scraper.ex      # Fetches proxies from sources
-│       ├── tester.ex       # Tests proxy connectivity
-│       ├── cache.ex        # Caching system
-│       └── csv_writer.ex   # CSV generation
-├── proxies/                # Output directory
-├── .cache/                 # Cache directory (gitignored)
-│   ├── sources/            # Cached proxy list downloads
-│   └── results/            # Cached test results
-├── .github/
-│   └── workflows/
-│       └── update_proxies.yml
-├── mix.exs
-└── README.md
-```
 
 ## Configuration
 
