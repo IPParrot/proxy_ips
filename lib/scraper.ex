@@ -102,31 +102,67 @@ defmodule ProxyIps.Scraper do
 
   @doc """
   Parses a proxy list text into proxy maps with source information
+  Supports formats: IP:PORT, protocol://IP:PORT, and CSV (IP,PORT)
   """
   @spec parse_proxy_list(String.t(), String.t()) :: [proxy_map()]
   def parse_proxy_list(text, source) when is_binary(text) do
+    # Detect if source is CSV by URL extension
+    is_csv = String.ends_with?(source, ".csv")
+
     text
     |> String.split(["\n", "\r\n", "\r"], trim: true)
     |> Enum.map(&String.trim/1)
-    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "#")))
-    |> Enum.filter(&valid_proxy_format?/1)
-    |> Enum.map(fn proxy ->
-      [host, port] = String.split(proxy, ":")
+    |> Enum.reject(&(&1 == "" or String.starts_with?(&1, "#") or String.contains?(&1, "dest_ip")))
+    |> Enum.map(&parse_proxy_line(&1, is_csv))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(fn {host, port} ->
+      proxy = "#{host}:#{port}"
       %{proxy: proxy, host: host, port: port, source: source}
     end)
   end
 
-  @doc """
-  Validates proxy format (IP:PORT)
-  """
-  @spec valid_proxy_format?(String.t()) :: boolean()
-  def valid_proxy_format?(proxy) do
-    case String.split(proxy, ":") do
-      [ip, port] ->
-        valid_ip?(ip) and valid_port?(port)
+  defp parse_proxy_line(line, is_csv) do
+    cond do
+      # CSV format: IP,PORT or IP,PORT,... (take first two columns)
+      is_csv ->
+        case String.split(line, ",") do
+          [host, port | _rest] ->
+            host = String.trim(host)
+            port = String.trim(port)
+            if valid_ip?(host) and valid_port?(port), do: {host, port}, else: nil
+
+          _ ->
+            nil
+        end
+
+      # Protocol prefix format: http://IP:PORT, socks5://IP:PORT, etc.
+      String.contains?(line, "://") ->
+        case String.split(line, "://") do
+          [_protocol, proxy_part] ->
+            parse_simple_proxy(proxy_part)
+
+          _ ->
+            nil
+        end
+
+      # Simple format: IP:PORT
+      true ->
+        parse_simple_proxy(line)
+    end
+  end
+
+  defp parse_simple_proxy(proxy_string) do
+    case String.split(proxy_string, ":") do
+      # Standard format: IP:PORT
+      [host, port] ->
+        if valid_ip?(host) and valid_port?(port), do: {host, port}, else: nil
+
+      # Extended format: IP:PORT:COUNTRY or IP:PORT:EXTRA:INFO
+      [host, port | _rest] ->
+        if valid_ip?(host) and valid_port?(port), do: {host, port}, else: nil
 
       _ ->
-        false
+        nil
     end
   end
 
