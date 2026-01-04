@@ -13,8 +13,8 @@ defmodule ProxyIps.Application do
 
     # Start katipo pool for all proxy testing
     pool_name = :katipo_pool
-    pool_size = 100
-    pool_opts = [pipelining: :nothing, max_total_connections: 100]
+    pool_size = 200
+    pool_opts = [pipelining: :nothing, max_total_connections: 200]
     {:ok, _} = :katipo_pool.start(pool_name, pool_size, pool_opts)
 
     # No supervision tree needed - katipo manages its own workers

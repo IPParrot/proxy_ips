@@ -50,7 +50,7 @@ defmodule ProxyIps.Tester do
       # Test only new proxies
       newly_working =
         needs_testing
-        |> Flow.from_enumerable(max_demand: 20, stages: 16)
+        |> Flow.from_enumerable(max_demand: 30, stages: 24)
         |> Flow.map(fn proxy_map ->
           result =
             case test_proxy_with_cache(proxy_map.proxy, protocol) do
