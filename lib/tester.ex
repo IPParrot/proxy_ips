@@ -7,7 +7,7 @@ defmodule ProxyIps.Tester do
 
   alias ProxyIps.{Cache, Config, Scraper}
 
-  @test_url "https://httpbin.org/ip"
+  @test_url "https://icanhazip.com"
 
   @doc """
   Tests multiple proxies in parallel using Flow with caching
